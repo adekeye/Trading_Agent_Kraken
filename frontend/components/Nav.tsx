@@ -28,7 +28,9 @@ export default function Nav() {
 
   return (
     <nav className="topnav">
-      <div className="brand">⚓ Kraken Trading Agent</div>
+      <Link href="/" className="brand" aria-label="Go to home">
+        ⚓ Kraken Trading Agent
+      </Link>
       {authed && (
         <>
           <Link href="/">Trade</Link>

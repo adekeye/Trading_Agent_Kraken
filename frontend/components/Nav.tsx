@@ -5,6 +5,18 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, getToken, setToken } from "../lib/api";
 import type { UserSettings } from "../lib/types";
+import {
+  TerminalIcon,
+  WalletIcon,
+  ListIcon,
+  HistoryIcon,
+  ShieldIcon,
+  SettingsIcon,
+  KeyIcon,
+  LogOutIcon,
+  UserIcon,
+  PowerIcon,
+} from "./Icons";
 
 export default function Nav() {
   const router = useRouter();
@@ -29,33 +41,39 @@ export default function Nav() {
   return (
     <nav className="topnav">
       <Link href="/" className="brand" aria-label="Go to home">
-        ⚓ Kraken Trading Agent
+        <span className="mark" aria-hidden="true" />
+        Kraken Terminal
       </Link>
       {authed && (
         <>
-          <Link href="/">Trade</Link>
-          <Link href="/balances">Balances</Link>
-          <Link href="/orders">Open Orders</Link>
-          <Link href="/history">History</Link>
-          <Link href="/audit">Audit</Link>
-          <Link href="/settings">Settings</Link>
-          <Link href="/connect">Connect Kraken</Link>
+          <Link href="/"><TerminalIcon /> Trade</Link>
+          <Link href="/balances"><WalletIcon /> Balances</Link>
+          <Link href="/orders"><ListIcon /> Orders</Link>
+          <Link href="/history"><HistoryIcon /> History</Link>
+          <Link href="/audit"><ShieldIcon /> Audit</Link>
+          <Link href="/settings"><SettingsIcon /> Settings</Link>
+          <Link href="/connect"><KeyIcon /> API</Link>
         </>
       )}
       <div className="spacer" />
       {settings && (
         <>
           <span className={`badge ${settings.dry_run ? "dry" : "live"}`}>
-            {settings.dry_run ? "DRY-RUN" : "LIVE"}
+            <span className={`dot ${settings.dry_run ? "warn" : "gain"}`} />
+            {settings.dry_run ? "Dry-run" : "Live"}
           </span>
-          {!settings.trading_enabled && <span className="badge kill">KILL SWITCH</span>}
+          {!settings.trading_enabled && (
+            <span className="badge kill"><PowerIcon /> Kill switch</span>
+          )}
         </>
       )}
       {authed ? (
-        <button className="ghost" onClick={logout}>Log out</button>
+        <button className="ghost" onClick={logout} aria-label="Log out">
+          <LogOutIcon /> Log out
+        </button>
       ) : (
         <>
-          <Link href="/login">Login</Link>
+          <Link href="/login"><UserIcon /> Login</Link>
           <Link href="/register">Register</Link>
         </>
       )}

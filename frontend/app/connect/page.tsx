@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "../../lib/api";
+import { KeyIcon, ShieldIcon, CheckIcon } from "../../components/Icons";
 
 export default function ConnectPage() {
   const router = useRouter();
@@ -33,29 +34,55 @@ export default function ConnectPage() {
   }
 
   return (
-    <div className="card" style={{ maxWidth: 560, margin: "32px auto" }}>
-      <h1 className="h1">Connect Kraken</h1>
-      <p className="muted">
-        Your API key and secret are encrypted at rest with Fernet. Use a key that has{" "}
-        <strong>only</strong> the permissions you need (Query Funds, Open/Close Orders).
-      </p>
+    <div className="card" style={{ maxWidth: 540, margin: "32px auto" }}>
+      <h1 className="h1"><KeyIcon /> Connect Kraken <span className="h1-rule" /></h1>
+
+      <div style={{
+        display: "flex", gap: 8, padding: 10, marginBottom: 14,
+        background: "var(--info-soft)", border: "1px solid var(--info)",
+        borderRadius: "var(--radius-sm)", fontSize: 12, color: "var(--text-dim)",
+      }}>
+        <ShieldIcon className="icon lg" style={{ color: "var(--info)", flexShrink: 0 }} />
+        <div>
+          API key + secret are encrypted at rest with Fernet. Use a key with the
+          minimum permissions: <span className="mono">Query Funds</span>,{" "}
+          <span className="mono">Query/Modify/Cancel Orders</span>.
+        </div>
+      </div>
+
       <form onSubmit={submit}>
-        <div style={{ display: "grid", gap: 12 }}>
-          <input placeholder="API Key" value={apiKey} onChange={e => setApiKey(e.target.value)} required />
-          <input
-            placeholder="API Secret"
-            value={apiSecret}
-            onChange={e => setApiSecret(e.target.value)}
-            type="password"
-            required
-          />
+        <div style={{ display: "grid", gap: 10 }}>
+          <div>
+            <div className="label" style={{ marginBottom: 4 }}>API Key</div>
+            <input
+              placeholder="paste API key"
+              value={apiKey}
+              onChange={e => setApiKey(e.target.value)}
+              required
+              autoComplete="off"
+              spellCheck={false}
+              style={{ fontFamily: "var(--font-mono)" }}
+            />
+          </div>
+          <div>
+            <div className="label" style={{ marginBottom: 4 }}>API Secret</div>
+            <input
+              placeholder="paste API secret"
+              value={apiSecret}
+              onChange={e => setApiSecret(e.target.value)}
+              type="password"
+              required
+              autoComplete="off"
+              style={{ fontFamily: "var(--font-mono)" }}
+            />
+          </div>
           <button className="primary" disabled={loading}>
-            {loading ? "Verifying…" : "Save credentials"}
+            <CheckIcon /> {loading ? "Verifying…" : "Save credentials"}
           </button>
         </div>
       </form>
-      {msg && <p className="ok-text">{msg}</p>}
-      {err && <p className="danger-text">{err}</p>}
+      {msg && <p className="ok-text" style={{ marginTop: 10, fontSize: 12 }}>{msg}</p>}
+      {err && <p className="danger-text" style={{ marginTop: 10, fontSize: 12 }}>{err}</p>}
     </div>
   );
 }

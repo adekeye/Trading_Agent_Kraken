@@ -129,12 +129,32 @@ class KrakenClient:
         ordertype: str,
         volume: float | str,
         price: float | str,
+        price2: float | str | None = None,
         validate: bool = False,
     ) -> dict[str, Any]:
-        if ordertype != "limit":
-            raise ValueError("Only limit orders are supported")
+        """Submit an AddOrder.
+
+        Supported ``ordertype`` values:
+        - ``"limit"`` — plain limit. ``price`` is the limit.
+        - ``"stop-loss-limit"`` — fires when market falls to ``price``;
+          places a limit at ``price2``. Both required.
+        - ``"take-profit-limit"`` — fires when market rises to ``price``;
+          places a limit at ``price2``. Both required.
+
+        Market and bare stop-loss/take-profit (which become market on Kraken)
+        are deliberately not supported.
+        """
+        SUPPORTED = {"limit", "stop-loss-limit", "take-profit-limit"}
+        if ordertype not in SUPPORTED:
+            raise ValueError(
+                f"Unsupported ordertype '{ordertype}'. Supported: {sorted(SUPPORTED)}"
+            )
         if side not in {"buy", "sell"}:
             raise ValueError("side must be 'buy' or 'sell'")
+        if ordertype != "limit" and price2 is None:
+            raise ValueError(
+                f"{ordertype} requires both price (trigger) and price2 (limit)"
+            )
         data: dict[str, Any] = {
             "pair": pair,
             "type": side,
@@ -142,6 +162,8 @@ class KrakenClient:
             "volume": str(volume),
             "price": str(price),
         }
+        if price2 is not None:
+            data["price2"] = str(price2)
         if validate:
             data["validate"] = "true"
         return await self._private("AddOrder", data)

@@ -148,17 +148,64 @@ def _detect_quote(text: str) -> str | None:
     return None
 
 
+# Phrasings that indicate a stop-loss-LIMIT trigger (price falling).
+# We require either an explicit "stop loss" / "stop-limit" or a downward verb.
+_STOP_LOSS_PATTERN = re.compile(
+    r"\bstop[-\s]?loss(?:[-\s]?limit)?\b"
+    r"|\bif\s+price\s+(?:falls|drops|goes\s+below|hits|reaches)\s+(?:to\s+)?(?:below\s+)?"
+    r"|\bwhen\s+price\s+(?:falls|drops|goes\s+below|hits)\s+(?:below\s+)?",
+    re.IGNORECASE,
+)
+
+# Phrasings that indicate a take-profit-LIMIT trigger (price rising).
+_TAKE_PROFIT_PATTERN = re.compile(
+    r"\btake[-\s]?profit(?:[-\s]?limit)?\b"
+    r"|\bif\s+price\s+(?:rises|goes\s+above|hits)\s+(?:to\s+)?(?:above\s+)?"
+    r"|\bwhen\s+price\s+(?:rises|goes\s+above|hits)\s+(?:above\s+)?",
+    re.IGNORECASE,
+)
+
+
 def _detect_order_type(text: str) -> tuple[str | None, str | None]:
-    """Returns (order_type, rejection_reason)."""
+    """Returns (order_type, rejection_reason).
+
+    Recognised:
+    - "limit"               → plain limit order with `limit_price`
+    - "stop-loss-limit"     → trigger fires when price FALLS to trigger; resulting order is a limit
+    - "take-profit-limit"   → trigger fires when price RISES to trigger; resulting order is a limit
+
+    Explicitly rejected:
+    - bare market orders ("market buy BTC")
+    - bare stop-loss / take-profit (without -limit) — those become market orders on Kraken
+    - trailing stops
+    """
     if re.search(r"\bmarket\s+(buy|sell)\b|\bmarket\s+order\b", text):
         return None, "Rejected: only limit orders are supported. Specify a limit price."
-    if re.search(r"\bstop[-\s]?loss\b|\bstop\b\s+order|\btrailing\b", text):
-        return None, "Rejected: only limit orders are supported."
+    if re.search(r"\btrailing\b", text):
+        return None, "Rejected: trailing stops are not supported."
+
+    # Bare "stop loss" without "limit" maps to a stop-loss-MARKET on Kraken,
+    # which we deliberately don't support. The user must specify a limit price.
+    has_stop_loss_phrase = bool(_STOP_LOSS_PATTERN.search(text))
+    has_take_profit_phrase = bool(_TAKE_PROFIT_PATTERN.search(text))
+
+    # Distinguish "rises to X" (take-profit) from "falls to X" (stop-loss).
+    # The same word "hits" is ambiguous and matches both — we prefer the
+    # more conservative interpretation (stop-loss) when only "hits" is used,
+    # which preserves capital. The user can be explicit by using "rises"
+    # or "take profit" if they actually want take-profit.
+    if has_stop_loss_phrase and not has_take_profit_phrase:
+        return "stop-loss-limit", None
+    if has_take_profit_phrase and not has_stop_loss_phrase:
+        return "take-profit-limit", None
+    if has_stop_loss_phrase and has_take_profit_phrase:
+        # Both matched — most likely from the ambiguous "hits" word; default to
+        # stop-loss for safety (downside protection beats upside capture).
+        return "stop-loss-limit", None
+
+    # Plain limit when an "at"/"limit" phrase is present.
     if re.search(r"\b(at|@|limit)\b", text):
         return "limit", None
-    # 'if price reaches X' is treated as a stop trigger we don't support
-    if re.search(r"\bif\s+price\s+reaches\b|\bwhen\s+price\s+hits\b", text):
-        return None, "Rejected: conditional/stop orders are not supported. Use a plain limit price (e.g. 'buy 1 ETH at 3100')."
     return None, None
 
 
@@ -200,9 +247,36 @@ def _detect_limit_price(text: str) -> float | None:
     # Note: \b doesn't anchor at '@' (non-word char), so we use a non-word-boundary
     # alternative for that branch.
     patterns = [
+        rf"\blimit\s+(?:price\s+)?(?:of\s+)?(?:at\s+)?\$?\s*({_NUM})",
         rf"(?:\bat\b|@)\s*\$?\s*({_NUM})",
-        rf"\blimit\s+price\s+(?:of\s+)?\$?\s*({_NUM})",
         rf"\bfor\s+\$?\s*({_NUM})\s+each\b",
+    ]
+    for p in patterns:
+        m = re.search(p, text)
+        if m:
+            try:
+                return _to_float(m.group(1))
+            except ValueError:
+                continue
+    return None
+
+
+def _detect_trigger_price(text: str) -> float | None:
+    """Pull the trigger price for a stop-loss-limit / take-profit-limit order.
+
+    Recognised forms:
+    - "stop loss at 180"       / "stop-loss at 180"
+    - "take profit at 200"     / "take-profit at 200"
+    - "if price falls to 180"  / "if price drops to 180"
+    - "if price reaches 200"   / "when price hits 180"
+    - "if price rises to 200"  / "when price goes above 200"
+    - "trigger at 180"         / "triggered at 180"
+    """
+    patterns = [
+        rf"\b(?:stop[-\s]?loss|take[-\s]?profit)(?:[-\s]?limit)?\s+(?:at\s+)?\$?\s*({_NUM})",
+        rf"\bif\s+price\s+(?:falls|drops|rises|reaches|hits|goes\s+(?:below|above))\s+(?:to\s+)?(?:below\s+|above\s+)?\$?\s*({_NUM})",
+        rf"\bwhen\s+price\s+(?:falls|drops|rises|reaches|hits|goes\s+(?:below|above))\s+(?:to\s+)?(?:below\s+|above\s+)?\$?\s*({_NUM})",
+        rf"\btrigger(?:ed)?\s+(?:at\s+)?\$?\s*({_NUM})",
     ]
     for p in patterns:
         m = re.search(p, text)
@@ -325,6 +399,7 @@ def parse_command(raw: str) -> ParsedCommand:
     quote = _detect_quote(text) or "USD"
     quantity, notional = _detect_quantity_and_notional(text)
     limit_price = _detect_limit_price(text)
+    trigger_price = _detect_trigger_price(text) if order_type != "limit" else None
 
     # 'sell all my eth at 4000' style — explicitly reject (we require numeric quantity)
     if re.search(r"\b(all|everything|all\s+my|max|maximum)\b", text) and quantity is None:
@@ -340,6 +415,25 @@ def parse_command(raw: str) -> ParsedCommand:
                 "(e.g. 'sell 0.5 ETH at 4000')."
             ),
         )
+
+    # --- Conditional orders need a trigger price. If the user gave only one
+    # price, treat it as both trigger and limit (and warn about slippage). ---
+    is_conditional = order_type in {"stop-loss-limit", "take-profit-limit"}
+    if is_conditional:
+        if trigger_price is None and limit_price is None:
+            return ParsedCommand(
+                intent="place_order", confidence=0.5, side=side, asset=asset,
+                quote_currency=quote, order_type=order_type,
+                requires_confirmation=False,
+                rejection_reason=(
+                    f"Rejected: {order_type} requires a trigger price. "
+                    "Try 'sell 100 SOL stop loss at 180 limit 175'."
+                ),
+            )
+        if trigger_price is None:
+            trigger_price = limit_price
+        if limit_price is None:
+            limit_price = trigger_price
 
     if limit_price is None:
         return ParsedCommand(
@@ -379,6 +473,25 @@ def parse_command(raw: str) -> ParsedCommand:
     if asset_class == "equity":
         warnings.append(EQUITY_DISCLOSURE)
 
+    # Conditional-order warnings.
+    if is_conditional and trigger_price == limit_price:
+        warnings.append(
+            "Trigger price equals limit price — if the market gaps through your "
+            "trigger you may not get filled. Consider setting the limit slightly "
+            "below the trigger for sells (or above for buys) to allow for slippage."
+        )
+    if is_conditional and side == "sell" and order_type == "stop-loss-limit":
+        warnings.append(
+            f"Stop-loss-limit SELL: when the market falls to {trigger_price}, "
+            f"a limit sell at {limit_price} will be placed. The order may not "
+            f"fill if the market keeps falling past {limit_price}."
+        )
+    if is_conditional and side == "sell" and order_type == "take-profit-limit":
+        warnings.append(
+            f"Take-profit-limit SELL: when the market rises to {trigger_price}, "
+            f"a limit sell at {limit_price} will be placed."
+        )
+
     # Confidence scoring: more explicit = higher
     confidence = 0.6
     if quantity and limit_price and asset and side:
@@ -394,7 +507,8 @@ def parse_command(raw: str) -> ParsedCommand:
         quantity=quantity,
         notional_amount=notional,
         limit_price=limit_price,
-        order_type="limit",
+        trigger_price=trigger_price,
+        order_type=order_type or "limit",
         confidence=confidence,
         requires_confirmation=True,
         warnings=warnings,

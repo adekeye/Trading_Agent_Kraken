@@ -6,6 +6,8 @@ export type Intent =
   | "show_history"
   | "unknown";
 
+export type OrderType = "limit" | "stop-loss-limit" | "take-profit-limit";
+
 export interface ParsedCommand {
   intent: Intent;
   side?: "buy" | "sell" | null;
@@ -14,7 +16,8 @@ export interface ParsedCommand {
   quantity?: number | null;
   notional_amount?: number | null;
   limit_price?: number | null;
-  order_type?: "limit" | null;
+  trigger_price?: number | null;
+  order_type?: OrderType | null;
   cancel_txid?: string | null;
   confidence: number;
   requires_confirmation: boolean;
@@ -26,9 +29,10 @@ export interface OrderPreview {
   confirmation_id: string;
   pair: string;
   side: "buy" | "sell";
-  order_type: "limit";
+  order_type: OrderType;
   volume: number;
   limit_price: number;
+  trigger_price?: number | null;
   notional_value: number;
   quote_currency: string;
   fees_estimate: number | null;

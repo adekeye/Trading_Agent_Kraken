@@ -80,11 +80,16 @@ class RiskEngine:
                 reason=f"Quote currency '{quote}' is not supported.",
             )
 
-        # Order type
-        if parsed.order_type and parsed.order_type != "limit":
+        # Order type — accept plain limit and the two limit-backed conditional
+        # variants. Market / stop-loss-MARKET / trailing are still rejected.
+        SUPPORTED_ORDER_TYPES = {"limit", "stop-loss-limit", "take-profit-limit"}
+        if parsed.order_type and parsed.order_type not in SUPPORTED_ORDER_TYPES:
             return RiskDecision(
                 approved=False,
-                reason="Only limit orders are supported.",
+                reason=(
+                    f"Order type '{parsed.order_type}' is not supported. "
+                    f"Allowed: {', '.join(sorted(SUPPORTED_ORDER_TYPES))}."
+                ),
             )
 
         # Numeric sanity
@@ -92,6 +97,12 @@ class RiskEngine:
             return RiskDecision(approved=False, reason="Quantity must be positive.")
         if parsed.limit_price is None or parsed.limit_price <= 0:
             return RiskDecision(approved=False, reason="Limit price must be positive.")
+
+        # Conditional orders need a trigger and it must be positive.
+        is_conditional = parsed.order_type in {"stop-loss-limit", "take-profit-limit"}
+        if is_conditional:
+            if parsed.trigger_price is None or parsed.trigger_price <= 0:
+                return RiskDecision(approved=False, reason="Trigger price must be positive.")
 
         notional = parsed.quantity * parsed.limit_price
         if notional > self.s.max_order_notional_usd:

@@ -22,7 +22,14 @@ nav.topnav {
   display: flex; gap: 16px; align-items: center; padding: 12px 24px;
   background: var(--panel); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 10;
 }
-nav.topnav .brand { font-weight: 700; margin-right: 16px; }
+nav.topnav .brand {
+  font-weight: 700;
+  margin-right: 16px;
+  color: var(--text);
+  text-decoration: none;
+  cursor: pointer;
+}
+nav.topnav .brand:hover { color: var(--accent); }
 nav.topnav a { color: var(--muted); padding: 6px 8px; border-radius: 6px; }
 nav.topnav a:hover { color: var(--text); background: var(--panel-2); }
 nav.topnav .spacer { flex: 1; }

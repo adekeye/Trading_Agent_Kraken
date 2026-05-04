@@ -96,3 +96,39 @@ async def test_zero_price_blocked():
     )
     decision = await RiskEngine(make_settings()).evaluate(parsed)
     assert decision.approved is False
+
+
+@pytest.mark.asyncio
+async def test_stop_loss_limit_approved():
+    parsed = parse_command("Sell 0.01 BTC stop loss at 60000 limit 59500")
+    decision = await RiskEngine(
+        make_settings(max_order_notional_usd=10_000)
+    ).evaluate(parsed)
+    assert decision.approved is True
+
+
+@pytest.mark.asyncio
+async def test_stop_loss_limit_without_trigger_blocked():
+    """Risk engine catches a stop-loss-limit with a missing trigger."""
+    parsed = ParsedCommand(
+        intent="place_order", side="sell", asset="BTC", quote_currency="USD",
+        quantity=1, limit_price=59500, trigger_price=None,
+        order_type="stop-loss-limit",
+        confidence=0.9, requires_confirmation=True,
+    )
+    decision = await RiskEngine(make_settings(max_order_notional_usd=200_000)).evaluate(parsed)
+    assert decision.approved is False
+    assert "trigger" in (decision.reason or "").lower()
+
+
+@pytest.mark.asyncio
+async def test_unknown_order_type_blocked():
+    parsed = ParsedCommand(
+        intent="place_order", side="sell", asset="BTC", quote_currency="USD",
+        quantity=1, limit_price=100, order_type="limit",  # type-checker
+        confidence=0.9, requires_confirmation=True,
+    )
+    # bypass typing to simulate a future/unsupported type
+    parsed.order_type = "trailing-stop"  # type: ignore
+    decision = await RiskEngine(make_settings()).evaluate(parsed)
+    assert decision.approved is False

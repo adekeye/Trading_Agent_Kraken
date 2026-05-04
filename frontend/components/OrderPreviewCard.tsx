@@ -33,12 +33,18 @@ export default function OrderPreviewCard({ preview }: { preview: OrderPreview })
         </div>
         <div>
           <div className="label">Type</div>
-          <div className="value">limit</div>
+          <div className="value">{preview.order_type}</div>
         </div>
         <div>
           <div className="label">Quantity</div>
           <div className="value mono">{preview.volume}</div>
         </div>
+        {preview.trigger_price != null && (
+          <div>
+            <div className="label">Trigger price</div>
+            <div className="value mono">{preview.trigger_price}</div>
+          </div>
+        )}
         <div>
           <div className="label">Limit price</div>
           <div className="value mono">{preview.limit_price}</div>

@@ -45,6 +45,9 @@ Intent = Literal[
 ]
 
 
+OrderType = Literal["limit", "stop-loss-limit", "take-profit-limit"]
+
+
 class ParsedCommand(BaseModel):
     """Structured representation of a natural-language trading command."""
 
@@ -55,7 +58,10 @@ class ParsedCommand(BaseModel):
     quantity: Optional[float] = None
     notional_amount: Optional[float] = None
     limit_price: Optional[float] = None
-    order_type: Optional[Literal["limit"]] = None
+    # Trigger price for conditional orders (stop-loss-limit / take-profit-limit).
+    # Maps to Kraken's `price` field; the limit_price maps to `price2`.
+    trigger_price: Optional[float] = None
+    order_type: Optional[OrderType] = None
     cancel_txid: Optional[str] = None
 
     confidence: float = 0.0
@@ -74,9 +80,12 @@ class OrderPreview(BaseModel):
     confirmation_id: str
     pair: str
     side: Literal["buy", "sell"]
-    order_type: Literal["limit"] = "limit"
+    order_type: OrderType = "limit"
     volume: float
     limit_price: float
+    # Set only for stop-loss-limit / take-profit-limit. The order fires when
+    # the market crosses this trigger; once filled it's a limit at limit_price.
+    trigger_price: Optional[float] = None
     notional_value: float
     quote_currency: str
     fees_estimate: Optional[float] = None

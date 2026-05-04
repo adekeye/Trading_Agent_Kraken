@@ -61,10 +61,44 @@ async def test_kraken_error_raises():
 
 @pytest.mark.asyncio
 @respx.mock
-async def test_add_order_only_supports_limit():
+async def test_add_order_rejects_market():
+    """Market orders are still rejected — only limit-backed types are allowed."""
     async with KrakenClient(api_key="key", api_secret=TEST_SECRET) as kc:
         with pytest.raises(ValueError):
             await kc.add_order(pair="XBTUSD", side="buy", ordertype="market", volume=1, price=1)
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_add_order_stop_loss_limit_sends_price2():
+    """stop-loss-limit must send both `price` (trigger) and `price2` (limit)."""
+    expected = {
+        "descr": {"order": "sell 1.0 XBTUSD stop-loss-limit @ 60000.0 -> 59500.0"},
+        "txid": ["O7XYZ-SL-1"],
+    }
+    route = respx.post("https://api.kraken.com/0/private/AddOrder").mock(
+        return_value=httpx.Response(200, json=_kraken_response(expected))
+    )
+    async with KrakenClient(api_key="key", api_secret=TEST_SECRET) as kc:
+        await kc.add_order(
+            pair="XBTUSD", side="sell", ordertype="stop-loss-limit",
+            volume="1", price="60000", price2="59500",
+        )
+    sent = route.calls.last.request.content
+    assert b"ordertype=stop-loss-limit" in sent
+    assert b"price=60000" in sent
+    assert b"price2=59500" in sent
+
+
+@pytest.mark.asyncio
+async def test_add_order_stop_loss_limit_requires_price2():
+    async with KrakenClient(api_key="key", api_secret=TEST_SECRET) as kc:
+        with pytest.raises(ValueError):
+            await kc.add_order(
+                pair="XBTUSD", side="sell", ordertype="stop-loss-limit",
+                volume="1", price="60000",
+                # price2 missing
+            )
 
 
 @pytest.mark.asyncio

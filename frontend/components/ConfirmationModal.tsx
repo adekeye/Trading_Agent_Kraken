@@ -52,11 +52,27 @@ export default function ConfirmationModal({ preview, onCancel, onConfirm }: Prop
           </span>
           <span className="num">{preview.volume}</span>{" "}
           <span style={{ color: "var(--text-dim)" }}>{preview.pair}</span>{" "}
-          <span style={{ color: "var(--text-mute)" }}>@</span>{" "}
-          <span className="num">{preview.limit_price}</span>{" "}
+          {preview.trigger_price != null ? (
+            <>
+              <span style={{ color: "var(--text-mute)" }}>trigger</span>{" "}
+              <span className="num">{preview.trigger_price}</span>{" "}
+              <span style={{ color: "var(--text-mute)" }}>limit</span>{" "}
+              <span className="num">{preview.limit_price}</span>{" "}
+            </>
+          ) : (
+            <>
+              <span style={{ color: "var(--text-mute)" }}>@</span>{" "}
+              <span className="num">{preview.limit_price}</span>{" "}
+            </>
+          )}
           <span style={{ color: "var(--text-mute)" }}>·</span>{" "}
           <span className="num">{preview.notional_value.toFixed(2)}</span>{" "}
           <span style={{ color: "var(--text-mute)" }}>{preview.quote_currency}</span>
+          {preview.order_type !== "limit" && (
+            <div style={{ marginTop: 6, fontSize: 11, color: "var(--text-mute)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+              {preview.order_type}
+            </div>
+          )}
         </div>
 
         {preview.dry_run ? (

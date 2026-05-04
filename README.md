@@ -130,7 +130,7 @@ The app will be at <http://localhost:3000> (Postgres at `localhost:5432`).
 | Safeguard                                           | Where                                           |
 |-----------------------------------------------------|-------------------------------------------------|
 | No order without explicit confirmation              | `/commands/preview` + `/commands/confirm`       |
-| Limit orders only — market/stop rejected            | `command_parser.py`, `kraken_client.add_order`  |
+| Limit-backed orders only (`limit`, `stop-loss-limit`, `take-profit-limit`) — market & trailing rejected | `command_parser.py`, `kraken_client.add_order`, `risk_engine.py` |
 | Stocks/equities rejected                            | `command_parser.py` STOCK_KEYWORDS              |
 | Vague commands rejected                             | `command_parser.py` VAGUE_PHRASES               |
 | Per-user max notional (default $1000)               | `risk_engine.py`                                |
@@ -159,6 +159,10 @@ The app will be at <http://localhost:3000> (Postgres at `localhost:5432`).
 | `Buy 5 AAPL at 180`                      | AAPLXUSD limit buy (xStocks; tokenized AAPL) |
 | `Sell 2 Tesla at 250`                    | TSLAXUSD limit sell (alias → TSLA)           |
 | `Buy 1 SPY at 580`                       | SPYXUSD limit buy (xStocks ETF)              |
+| `Sell 0.05 BTC stop loss at 60000 limit 59500` | XBTUSD stop-loss-limit, trigger 60000, limit 59500 |
+| `Sell 2 TSLA take profit at 280 limit 278` | TSLAXUSD take-profit-limit, trigger 280, limit 278 |
+| `Sell 100 SOL if price falls to 180`     | SOLUSD stop-loss-limit (trigger=limit=180; slippage warning) |
+| `Sell 100 SOL if price rises to 200`     | SOLUSD take-profit-limit (trigger=limit=200) |
 
 **Valid (read-only):**
 
@@ -175,7 +179,7 @@ The app will be at <http://localhost:3000> (Postgres at `localhost:5432`).
 | `Market buy BTC`                   | only limit orders are supported                 |
 | `Buy BTC`                          | missing limit price                             |
 | `Sell all my eth at 4000`          | "all" not allowed; specify exact quantity       |
-| `Sell 100 SOL if price reaches 180`| conditional orders not supported                |
+| `Sell 100 SOL if price reaches 180`| now accepted as take-profit-limit (use 'rises'/'falls' to disambiguate) |
 | `Make me money`                    | command too vague                               |
 | `go all in on bitcoin`             | command too vague                               |
 

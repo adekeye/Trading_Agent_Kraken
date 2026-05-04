@@ -136,10 +136,61 @@ def test_rejects_sell_all_keyword():
     assert "all" in p.rejection_reason.lower()
 
 
-def test_rejects_conditional_orders():
-    p = parse_command("Sell 100 SOL if price reaches 180")
-    # 'if price reaches' is treated as conditional, not a plain limit
-    assert p.rejection_reason is not None
+def test_conditional_take_profit_accepted():
+    """'if price reaches X' (rises) → take-profit-limit. Trigger and limit both 180."""
+    p = parse_command("Sell 100 SOL if price rises to 180")
+    assert p.intent == "place_order"
+    assert p.rejection_reason is None
+    assert p.order_type == "take-profit-limit"
+    assert p.trigger_price == 180
+    assert p.limit_price == 180
+    # Slippage warning when trigger == limit
+    assert any("trigger price equals limit" in w.lower() for w in p.warnings)
+
+
+def test_conditional_stop_loss_accepted():
+    """'if price falls to X' → stop-loss-limit."""
+    p = parse_command("Sell 100 SOL if price falls to 150")
+    assert p.intent == "place_order"
+    assert p.order_type == "stop-loss-limit"
+    assert p.trigger_price == 150
+    assert p.limit_price == 150
+
+
+def test_explicit_stop_loss_with_separate_limit():
+    """User supplies separate trigger and limit prices."""
+    p = parse_command("Sell 100 SOL stop loss at 180 limit 175")
+    assert p.intent == "place_order"
+    assert p.order_type == "stop-loss-limit"
+    assert p.trigger_price == 180
+    assert p.limit_price == 175
+    assert p.rejection_reason is None
+
+
+def test_take_profit_phrase_accepted():
+    p = parse_command("Sell 2 ETH take profit at 4500 limit 4490")
+    assert p.intent == "place_order"
+    assert p.order_type == "take-profit-limit"
+    assert p.trigger_price == 4500
+    assert p.limit_price == 4490
+
+
+def test_when_price_hits_defaults_to_stop_loss_for_safety():
+    """The ambiguous word 'hits' defaults to stop-loss (safer)."""
+    p = parse_command("Sell 1 BTC when price hits 60000")
+    assert p.intent == "place_order"
+    assert p.order_type == "stop-loss-limit"
+    assert p.trigger_price == 60000
+
+
+def test_rejects_market_stop_loss():
+    """Bare 'stop loss' (without -limit) on Kraken becomes a stop-loss-MARKET,
+    which we deliberately don't support. We require an explicit limit price."""
+    p = parse_command("Sell 1 BTC stop loss at 60000")
+    # Stop loss with single price → trigger = 60000, limit defaults to 60000 (still a limit-backed order). Accepted.
+    assert p.intent == "place_order"
+    assert p.order_type == "stop-loss-limit"
+    assert p.rejection_reason is None
 
 
 # ---------- Read-only intents ----------

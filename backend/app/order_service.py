@@ -98,9 +98,10 @@ async def build_preview(
         "confirmation_id": pending.id,
         "pair": pair,
         "side": parsed.side,
-        "order_type": "limit",
+        "order_type": parsed.order_type or "limit",
         "volume": parsed.quantity,
         "limit_price": parsed.limit_price,
+        "trigger_price": parsed.trigger_price,
         "notional_value": notional,
         "quote_currency": parsed.quote_currency or settings.preferred_quote_currency,
         "fees_estimate": None,
@@ -154,6 +155,12 @@ async def confirm_and_place(
 
     pair = to_kraken_pair_altname(parsed.asset or "", parsed.quote_currency or settings.preferred_quote_currency)
     notional = (parsed.quantity or 0.0) * (parsed.limit_price or 0.0)
+    ordertype = parsed.order_type or "limit"
+    is_conditional = ordertype != "limit"
+    # For conditional orders Kraken takes price=trigger, price2=limit.
+    # For plain limit, price=limit and price2 is omitted.
+    kraken_price = parsed.trigger_price if is_conditional else parsed.limit_price
+    kraken_price2 = parsed.limit_price if is_conditional else None
 
     if settings.dry_run:
         pending.consumed = True
@@ -162,14 +169,14 @@ async def confirm_and_place(
             kraken_txid=None,
             pair=pair,
             side=parsed.side or "",
-            order_type="limit",
+            order_type=ordertype,
             volume=parsed.quantity or 0.0,
             limit_price=parsed.limit_price or 0.0,
             notional_usd=notional,
             dry_run=True,
             status="dry_run_simulated",
             raw_command=pending.raw_command,
-            response_payload={"simulated": True},
+            response_payload={"simulated": True, "trigger_price": parsed.trigger_price},
         )
         db.add(record)
         db.commit()
@@ -179,13 +186,27 @@ async def confirm_and_place(
             event_type="order_simulated",
             raw_command=pending.raw_command,
             parsed_payload=parsed.model_dump(),
-            result_payload={"pair": pair, "volume": parsed.quantity, "price": parsed.limit_price},
+            result_payload={
+                "pair": pair, "volume": parsed.quantity,
+                "price": parsed.limit_price, "trigger": parsed.trigger_price,
+                "ordertype": ordertype,
+            },
         )
+        if is_conditional:
+            description = (
+                f"DRY RUN: would place {parsed.side} {parsed.quantity} {pair} "
+                f"{ordertype} trigger={parsed.trigger_price} limit={parsed.limit_price}"
+            )
+        else:
+            description = (
+                f"DRY RUN: would place {parsed.side} {parsed.quantity} {pair} "
+                f"@ {parsed.limit_price}"
+            )
         return OrderResult(
             success=True,
             dry_run=True,
             kraken_txid=None,
-            description=f"DRY RUN: would place {parsed.side} {parsed.quantity} {pair} @ {parsed.limit_price}",
+            description=description,
         )
 
     try:
@@ -200,9 +221,10 @@ async def confirm_and_place(
             response = await kc.add_order(
                 pair=pair,
                 side=parsed.side or "",
-                ordertype="limit",
+                ordertype=ordertype,
                 volume=parsed.quantity or 0.0,
-                price=parsed.limit_price or 0.0,
+                price=kraken_price or 0.0,
+                price2=kraken_price2,
             )
     except KrakenAPIError as ke:
         pending.consumed = True
@@ -240,7 +262,7 @@ async def confirm_and_place(
         kraken_txid=txid,
         pair=pair,
         side=parsed.side or "",
-        order_type="limit",
+        order_type=ordertype,
         volume=parsed.quantity or 0.0,
         limit_price=parsed.limit_price or 0.0,
         notional_usd=notional,

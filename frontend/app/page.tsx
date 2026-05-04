@@ -14,6 +14,8 @@ const EXAMPLES = [
   "Buy $500 worth of ETH at 3100",
   "Buy 5 AAPL at 180",
   "Sell 2 TSLA at 250",
+  "Sell 0.05 BTC stop loss at 60000 limit 59500",
+  "Sell 2 TSLA take profit at 280 limit 278",
   "Show my balances",
   "Show open orders",
   "Cancel order OABC-123",
@@ -216,6 +218,12 @@ export default function TradePage() {
                 <div><div className="label">Quote</div><div className="value mono">{parsed.quote_currency ?? <span className="muted">—</span>}</div></div>
                 <div><div className="label">Quantity</div><div className="value mono">{parsed.quantity ?? <span className="muted">—</span>}</div></div>
                 <div><div className="label">Limit price</div><div className="value mono">{parsed.limit_price ?? <span className="muted">—</span>}</div></div>
+                {parsed.trigger_price != null && (
+                  <div><div className="label">Trigger</div><div className="value mono">{parsed.trigger_price}</div></div>
+                )}
+                {parsed.order_type && parsed.order_type !== "limit" && (
+                  <div><div className="label">Type</div><div className="value">{parsed.order_type}</div></div>
+                )}
               </div>
               {parsed.rejection_reason && (
                 <p className="danger-text" style={{ marginTop: 12, fontSize: 12 }}>

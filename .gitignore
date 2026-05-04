@@ -55,3 +55,16 @@ coverage.xml
 # Logs
 *.log
 logs/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+.eslintcache
+next-env.d.ts
+
+# Local sqlite
+*.sqlite
+*.sqlite3
+trading_agent.db
+backend/trading_agent.db

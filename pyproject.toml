@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "trading-agent-kraken"
+version = "0.1.0"
+description = "Async trading agent for the Kraken cryptocurrency exchange"
+requires-python = ">=3.11"
+
+dependencies = [
+    # HTTP + WebSocket (async, same event loop)
+    "httpx>=0.28",
+    "websockets>=13.0",
+    # Config + validation
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    # Numerics / indicators
+    "numpy>=1.26",
+    "pandas>=2.0",
+    # Retry + scheduling
+    "tenacity>=8.2",
+    "apscheduler>=3.10",
+    # Logging
+    "structlog>=24.0",
+    # Persistence
+    "aiosqlite>=0.19",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-mock>=3.12",
+    "respx>=0.21",
+    "freezegun>=1.5",
+    "mypy>=1.10",
+    "ruff>=0.4",
+    "pre-commit>=3.7",
+]
+
+[project.scripts]
+trading-agent = "trading_agent.main:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/trading_agent"]

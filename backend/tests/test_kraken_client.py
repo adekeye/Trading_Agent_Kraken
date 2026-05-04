@@ -25,6 +25,14 @@ async def test_to_kraken_pair_altname_normalizes_btc():
 
 
 @pytest.mark.asyncio
+async def test_to_kraken_pair_altname_routes_xstocks():
+    """xStocks (tokenized equities) use the AAPLXUSD-style altname."""
+    assert to_kraken_pair_altname("AAPL", "USD") == "AAPLXUSD"
+    assert to_kraken_pair_altname("tsla", "usd") == "TSLAXUSD"
+    assert to_kraken_pair_altname("SPY", "USD") == "SPYXUSD"
+
+
+@pytest.mark.asyncio
 @respx.mock
 async def test_balance_signs_and_returns_data():
     route = respx.post("https://api.kraken.com/0/private/Balance").mock(

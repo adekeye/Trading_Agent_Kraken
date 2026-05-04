@@ -192,5 +192,17 @@ def normalize_quote(symbol: str) -> str:
 
 
 def to_kraken_pair_altname(asset: str, quote: str) -> str:
-    """Produce the Kraken pair altname (e.g. 'XBTUSD', 'XRPUSD')."""
-    return f"{normalize_asset(asset)}{normalize_quote(quote)}"
+    """Produce the Kraken pair altname.
+
+    For crypto assets this is ``<ASSET><QUOTE>`` (e.g. ``XBTUSD``, ``XRPUSD``).
+    For tokenized-equity (xStocks) tickers Kraken uses ``<TICKER>X<QUOTE>``
+    (e.g. ``AAPLXUSD``, ``TSLAXUSD``).
+    """
+    # Local import to avoid a circular reference at module load time.
+    from .equities import is_equity_ticker
+
+    sym = asset.strip().upper()
+    q = normalize_quote(quote)
+    if is_equity_ticker(sym):
+        return f"{sym}X{q}"
+    return f"{normalize_asset(asset)}{q}"

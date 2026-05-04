@@ -12,6 +12,8 @@ const EXAMPLES = [
   "Buy 1000 XRP at 0.55",
   "Sell 0.05 BTC at 65000",
   "Buy $500 worth of ETH at 3100",
+  "Buy 5 AAPL at 180",
+  "Sell 2 TSLA at 250",
   "Show my balances",
   "Show open orders",
   "Cancel order OABC-123",
@@ -98,7 +100,7 @@ export default function TradePage() {
           <div className="card">
             <div className="card-head">
               <h2 className="h2">Natural-language input</h2>
-              <span className="muted" style={{ fontSize: 11 }}>limit orders only · crypto only</span>
+              <span className="muted" style={{ fontSize: 11 }}>limit orders only · crypto + xStocks</span>
             </div>
             <textarea
               rows={3}

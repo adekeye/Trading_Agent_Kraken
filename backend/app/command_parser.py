@@ -10,12 +10,18 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .equities import (
+    EQUITY_ALIASES,
+    EQUITY_DISCLOSURE,
+    SUPPORTED_EQUITY_TICKERS,
+    normalize_equity_ticker,
+)
 from .schemas import ParsedCommand
 
 
 # ---------- Lexicons ----------
 
-SUPPORTED_ASSETS = {
+SUPPORTED_CRYPTO_ASSETS = {
     "BTC", "BITCOIN", "XBT",
     "ETH", "ETHEREUM",
     "XRP", "RIPPLE",
@@ -25,14 +31,16 @@ SUPPORTED_ASSETS = {
     "MATIC", "LINK",
 }
 
-QUOTE_CURRENCIES = {"USD", "USDT", "USDC", "EUR", "GBP"}
+# Backwards-compatible alias used elsewhere in the codebase. Now includes
+# equity tickers (and their natural-language aliases) so the same regex can
+# detect them.
+SUPPORTED_ASSETS = (
+    SUPPORTED_CRYPTO_ASSETS
+    | SUPPORTED_EQUITY_TICKERS
+    | {alias.upper() for alias in EQUITY_ALIASES}
+)
 
-# Forbidden tokens that indicate the user is trying to trade something we don't support.
-STOCK_KEYWORDS = {
-    "stock", "stocks", "share", "shares", "equity", "equities",
-    "tesla", "tsla", "apple", "aapl", "amzn", "googl", "msft",
-    "nasdaq", "nyse", "spy", "etf",
-}
+QUOTE_CURRENCIES = {"USD", "USDT", "USDC", "EUR", "GBP"}
 
 VAGUE_PHRASES = {
     "go all in", "all in", "make me money", "trade for me", "trade for me automatically",
@@ -102,20 +110,27 @@ def _detect_side(text: str) -> str | None:
     return None
 
 
-def _detect_asset(text: str) -> str | None:
-    # match longest-first to prefer "bitcoin" over "btc" if both appear
+_CRYPTO_ALIASES = {
+    "BITCOIN": "BTC",
+    "XBT": "BTC",
+    "ETHEREUM": "ETH",
+    "RIPPLE": "XRP",
+    "SOLANA": "SOL",
+}
+
+
+def _detect_asset(text: str) -> tuple[str | None, str | None]:
+    """Return ``(canonical_symbol, asset_class)`` where asset_class is
+    ``"crypto"`` or ``"equity"``. Match longest-first so multi-word aliases
+    like ``"bitcoin"`` win over ``"btc"`` when both are present."""
     words = sorted(SUPPORTED_ASSETS, key=len, reverse=True)
     for w in words:
         if re.search(rf"\b{re.escape(w.lower())}\b", text):
-            mapping = {
-                "BITCOIN": "BTC",
-                "XBT": "BTC",
-                "ETHEREUM": "ETH",
-                "RIPPLE": "XRP",
-                "SOLANA": "SOL",
-            }
-            return mapping.get(w.upper(), w.upper())
-    return None
+            equity = normalize_equity_ticker(w)
+            if equity is not None:
+                return equity, "equity"
+            return _CRYPTO_ALIASES.get(w.upper(), w.upper()), "crypto"
+    return None, None
 
 
 def _detect_quote(text: str) -> str | None:
@@ -212,17 +227,12 @@ def parse_command(raw: str) -> ParsedCommand:
     text = _normalize(raw)
 
     # --- Hard rejections (before anything else) ---
-    for kw in STOCK_KEYWORDS:
-        if re.search(rf"\b{re.escape(kw)}\b", text):
-            return ParsedCommand(
-                intent="unknown",
-                confidence=0.95,
-                requires_confirmation=False,
-                rejection_reason=(
-                    "Rejected: This app only supports Kraken crypto pairs. "
-                    "Stocks/equities are not supported."
-                ),
-            )
+    # Note: equities are now supported via Kraken's xStocks (tokenized stocks).
+    # We no longer reject the words "stock"/"shares"; instead we let the
+    # ticker-detection step decide. If someone types "buy IBM at 200" but IBM
+    # is not in our xStocks allowlist, the asset-detection branch below will
+    # produce a precise "unsupported asset" rejection instead of a blanket
+    # "stocks not supported" message.
     for phrase in VAGUE_PHRASES:
         if phrase in text:
             return ParsedCommand(
@@ -290,7 +300,7 @@ def parse_command(raw: str) -> ParsedCommand:
             rejection_reason=otype_reject,
         )
 
-    asset = _detect_asset(text)
+    asset, asset_class = _detect_asset(text)
     if asset is None:
         return ParsedCommand(
             intent="place_order",
@@ -298,8 +308,11 @@ def parse_command(raw: str) -> ParsedCommand:
             side=side,
             requires_confirmation=False,
             rejection_reason=(
-                "Rejected: unsupported or missing asset. Supported: "
-                "BTC, ETH, XRP, SOL, ADA, DOT, DOGE, USDT, USDC, MATIC, LINK."
+                "Rejected: unsupported or missing asset. "
+                "Supported crypto: BTC, ETH, XRP, SOL, ADA, DOT, DOGE, USDT, USDC, MATIC, LINK. "
+                "Supported equities (xStocks): "
+                + ", ".join(sorted(SUPPORTED_EQUITY_TICKERS))
+                + "."
             ),
         )
 
@@ -348,12 +361,17 @@ def parse_command(raw: str) -> ParsedCommand:
         )
 
     # Derive quantity from notional if needed.
-    derived_warning: list[str] = []
+    warnings: list[str] = []
     if quantity is None and notional is not None:
         quantity = round(notional / limit_price, 8)
-        derived_warning.append(
+        warnings.append(
             f"Quantity {quantity} derived from notional {notional} {quote} at {limit_price}"
         )
+
+    # Surface tokenized-equity disclosure on every equity order so the user
+    # confirms with eyes open.
+    if asset_class == "equity":
+        warnings.append(EQUITY_DISCLOSURE)
 
     # Confidence scoring: more explicit = higher
     confidence = 0.6
@@ -373,5 +391,5 @@ def parse_command(raw: str) -> ParsedCommand:
         order_type="limit",
         confidence=confidence,
         requires_confirmation=True,
-        warnings=derived_warning,
+        warnings=warnings,
     )

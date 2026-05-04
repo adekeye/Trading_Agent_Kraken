@@ -35,9 +35,14 @@ def test_register_login_and_parse_roundtrip():
         assert data["asset"] == "XRP"
         assert data["limit_price"] == 0.5
 
+        # 'Buy Tesla stock' is now an equity intent — but still incomplete
+        # (no qty / no limit price), so it's a place_order with a rejection.
         r = client.post("/commands/parse", json={"text": "Buy Tesla stock"}, headers=headers)
         assert r.status_code == 200
-        assert r.json()["intent"] == "unknown"
+        body = r.json()
+        assert body["intent"] == "place_order"
+        assert body["asset"] == "TSLA"
+        assert body["rejection_reason"] is not None
 
         r = client.get("/audit-logs", headers=headers)
         assert r.status_code == 200
@@ -58,14 +63,25 @@ def test_preview_rejects_market_orders_via_parser():
         assert "limit" in r.json()["detail"].lower()
 
 
-def test_preview_rejects_stocks():
+def test_preview_accepts_equity_orders_with_disclosure():
+    """Apple/Tesla and other xStocks tickers are now supported via Kraken's
+    tokenized equities. The preview should succeed and include the
+    tokenized-equity disclosure as a warning."""
     with TestClient(app) as client:
         client.post("/auth/register", json={"email": "stk@test.com", "password": "supersecret123"})
         login = client.post("/auth/login", json={"email": "stk@test.com", "password": "supersecret123"})
         token = login.json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
 
-        r = client.post("/commands/preview", json={"text": "Buy 10 Apple shares at 200"}, headers=headers)
+        # Use a small notional to stay under the default $1000 max.
+        r = client.post("/commands/preview", json={"text": "Buy 1 Apple at 180"}, headers=headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["pair"] == "AAPLXUSD"
+        assert any("tokenized" in w.lower() or "xstocks" in w.lower() for w in body["warnings"])
+
+        # Unsupported tickers still rejected precisely.
+        r = client.post("/commands/preview", json={"text": "Buy 1 IBM at 200"}, headers=headers)
         assert r.status_code == 400
 
 

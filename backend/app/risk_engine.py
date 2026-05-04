@@ -7,9 +7,14 @@ from .models import UserSettings
 from .schemas import ParsedCommand
 
 
-SUPPORTED_ASSETS = {
+from .equities import SUPPORTED_EQUITY_TICKERS
+
+SUPPORTED_CRYPTO_ASSETS = {
     "BTC", "ETH", "XRP", "SOL", "ADA", "DOT", "DOGE", "USDT", "USDC", "MATIC", "LINK",
 }
+
+# Combined allowlist: crypto symbols + xStocks (tokenized equity) tickers.
+SUPPORTED_ASSETS = SUPPORTED_CRYPTO_ASSETS | SUPPORTED_EQUITY_TICKERS
 
 SUPPORTED_QUOTES = {"USD", "USDT", "USDC", "EUR", "GBP"}
 

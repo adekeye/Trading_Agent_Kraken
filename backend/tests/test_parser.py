@@ -61,16 +61,46 @@ def test_alternative_at_symbol():
 
 # ---------- Rejections ----------
 
-def test_rejects_stocks():
+def test_bare_tesla_still_rejected_for_missing_qty_and_price():
+    """We accept equity tickers, but a bare 'Buy Tesla stock' is still
+    incomplete — no quantity, no limit price. The rejection is now about
+    the missing fields, not about stocks being unsupported."""
     p = parse_command("Buy Tesla stock")
-    assert p.intent == "unknown"
-    assert "stock" in (p.rejection_reason or "").lower() or "crypto" in (p.rejection_reason or "").lower()
-
-
-def test_rejects_apple_shares():
-    p = parse_command("Buy 10 Apple shares at 200")
-    assert p.intent == "unknown"
+    assert p.intent == "place_order"
+    assert p.asset == "TSLA"
     assert p.rejection_reason is not None
+    # Should NOT reject for being a stock anymore.
+    reason = (p.rejection_reason or "").lower()
+    assert "limit price" in reason or "quantity" in reason
+
+
+def test_apple_shares_with_qty_and_price_accepted():
+    """'Buy 10 Apple shares at 200' was previously rejected; now it
+    parses to AAPL with the equity disclosure attached."""
+    p = parse_command("Buy 10 Apple shares at 200")
+    assert p.intent == "place_order"
+    assert p.side == "buy"
+    assert p.asset == "AAPL"
+    assert p.quantity == 10
+    assert p.limit_price == 200
+    assert p.rejection_reason is None
+    assert any("xstocks" in w.lower() or "tokenized" in w.lower() for w in p.warnings)
+
+
+def test_tesla_ticker_aliased_to_tsla():
+    p = parse_command("Sell 2 TSLA at 250")
+    assert p.intent == "place_order"
+    assert p.asset == "TSLA"
+    assert p.quantity == 2
+    assert p.limit_price == 250
+
+
+def test_unknown_ticker_rejected_with_helpful_message():
+    p = parse_command("Buy 10 IBM at 200")
+    # IBM is not in our xStocks allowlist (yet) — should reject precisely.
+    assert p.rejection_reason is not None
+    reason = (p.rejection_reason or "").lower()
+    assert "unsupported" in reason or "missing asset" in reason
 
 
 def test_rejects_market_order():

@@ -4,8 +4,14 @@ A safety-first web application that turns natural-language commands like
 **"Buy 1000 XRP at 0.55"** into Kraken **limit orders**, with explicit
 preview & confirmation, dry-run mode, and a kill switch.
 
-> ⚠️ **Crypto only.** This app supports Kraken-listed crypto pairs. It will
-> reject anything that looks like a stock, market order, or vague instruction.
+> ⚠️ **Crypto + xStocks.** This app supports Kraken-listed **crypto pairs** and
+> Kraken's **tokenized equities ("xStocks"** — `AAPLx`, `TSLAx`, `SPYx`, …).
+> It will still reject market orders, vague instructions, and tickers not on the
+> allowlist. xStocks are *tokenized* representations of equities issued on
+> Solana by Backed Finance — they do not represent direct share ownership and
+> may not be available in all jurisdictions (notably restricted for US
+> persons). The disclosure is surfaced in the preview before every equity
+> order.
 
 ## Architecture
 
@@ -145,6 +151,9 @@ The app will be at <http://localhost:3000> (Postgres at `localhost:5432`).
 | `Buy $500 worth of ETH at 3100`          | ETHUSD; quantity derived = 500/3100          |
 | `sell 2 eth at $4,200`                   | ETHUSD limit sell, 2 @ 4200                  |
 | `buy 100 sol @ 150`                      | SOLUSD limit buy, 100 @ 150                  |
+| `Buy 5 AAPL at 180`                      | AAPLXUSD limit buy (xStocks; tokenized AAPL) |
+| `Sell 2 Tesla at 250`                    | TSLAXUSD limit sell (alias → TSLA)           |
+| `Buy 1 SPY at 580`                       | SPYXUSD limit buy (xStocks ETF)              |
 
 **Valid (read-only):**
 
@@ -156,7 +165,8 @@ The app will be at <http://localhost:3000> (Postgres at `localhost:5432`).
 
 | Command                            | Reason                                          |
 |------------------------------------|-------------------------------------------------|
-| `Buy Tesla stock`                  | stocks not supported                            |
+| `Buy Tesla stock`                  | recognised as TSLA — but missing qty + price    |
+| `Buy 1 IBM at 200`                 | IBM not in xStocks allowlist                    |
 | `Market buy BTC`                   | only limit orders are supported                 |
 | `Buy BTC`                          | missing limit price                             |
 | `Sell all my eth at 4000`          | "all" not allowed; specify exact quantity       |

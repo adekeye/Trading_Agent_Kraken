@@ -16,3 +16,7 @@ _TMP_DB = Path(tempfile.gettempdir()) / "kta_test.db"
 if _TMP_DB.exists():
     _TMP_DB.unlink()
 os.environ.setdefault("DATABASE_URL", f"sqlite:///{_TMP_DB}")
+
+# Keep the test suite offline: do not let the FastAPI lifespan spawn the
+# background xStocks refresh that hits Kraken's real public endpoint.
+os.environ.setdefault("EQUITY_REGISTRY_AUTO_REFRESH", "false")

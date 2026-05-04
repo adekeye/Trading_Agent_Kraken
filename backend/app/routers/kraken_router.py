@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, status
 from .. import audit_logger
 from ..auth import CurrentUser, DbSession
 from ..crypto_utils import decrypt_secret, encrypt_secret
+from ..equities import get_registry
 from ..kraken_client import KrakenAPIError, KrakenClient
 from ..models import KrakenCredential
 from ..schemas import (
@@ -80,6 +81,44 @@ async def pairs(pair: str | None = None):
     except KrakenAPIError as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Kraken: {e}")
     return {"pairs": data}
+
+
+@router.get("/equities-status")
+def equities_status():
+    """Status of the dynamically-discovered xStocks ticker registry."""
+    s = get_registry().status()
+    return {
+        "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
+        "ticker_count": s.ticker_count,
+        "using_fallback": s.using_fallback,
+        "last_error": s.last_error,
+        "tickers": sorted(get_registry().tickers()),
+    }
+
+
+@router.post("/refresh-pairs")
+async def refresh_pairs(user: CurrentUser, db: DbSession):
+    """Force a refresh of the xStocks registry from Kraken's public AssetPairs."""
+    async with KrakenClient() as kc:
+        s = await get_registry().refresh(kc)
+    audit_logger.log_event(
+        db,
+        user_id=user.id,
+        event_type="equity_registry_refreshed",
+        result_payload={
+            "ticker_count": s.ticker_count,
+            "using_fallback": s.using_fallback,
+            "last_error": s.last_error,
+        },
+        success=s.last_error is None,
+        message=s.last_error,
+    )
+    return {
+        "fetched_at": s.fetched_at.isoformat() if s.fetched_at else None,
+        "ticker_count": s.ticker_count,
+        "using_fallback": s.using_fallback,
+        "last_error": s.last_error,
+    }
 
 
 @router.get("/open-orders", response_model=OpenOrdersResponse)

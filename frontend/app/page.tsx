@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, getToken } from "../lib/api";
-import type { OrderPreview, OrderResult, ParsedCommand } from "../lib/types";
+import type { EquitiesStatus, OrderPreview, OrderResult, ParsedCommand } from "../lib/types";
 import OrderPreviewCard from "../components/OrderPreviewCard";
 import ConfirmationModal from "../components/ConfirmationModal";
-import { TerminalIcon, PlayIcon, AlertIcon, CheckIcon } from "../components/Icons";
+import { TerminalIcon, PlayIcon, AlertIcon, CheckIcon, RefreshIcon } from "../components/Icons";
 
 const EXAMPLES = [
   "Buy 1000 XRP at 0.55",
@@ -28,10 +28,30 @@ export default function TradePage() {
   const [result, setResult] = useState<OrderResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [equities, setEquities] = useState<EquitiesStatus | null>(null);
+  const [refreshingEquities, setRefreshingEquities] = useState(false);
 
   useEffect(() => {
     if (!getToken()) router.push("/login");
   }, [router]);
+
+  useEffect(() => {
+    if (!getToken()) return;
+    api.get<EquitiesStatus>("/kraken/equities-status").then(setEquities).catch(() => {});
+  }, []);
+
+  async function refreshEquities() {
+    setRefreshingEquities(true);
+    try {
+      await api.post("/kraken/refresh-pairs", {});
+      const s = await api.get<EquitiesStatus>("/kraken/equities-status");
+      setEquities(s);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setRefreshingEquities(false);
+    }
+  }
 
   async function handleParseOnly() {
     setErr(null); setResult(null); setPreview(null);
@@ -93,6 +113,31 @@ export default function TradePage() {
       <h1 className="h1">
         <TerminalIcon /> Command
         <span className="h1-rule" />
+        {equities && (
+          <span
+            className="badge"
+            title={
+              equities.using_fallback
+                ? "Using built-in fallback list — discovery has not yet succeeded."
+                : `Discovered from Kraken at ${new Date(equities.fetched_at!).toLocaleString()}`
+            }
+            style={{ fontWeight: 500 }}
+          >
+            <span className={`dot ${equities.using_fallback ? "warn" : "gain"}`} />
+            xStocks · {equities.ticker_count}
+            {equities.using_fallback ? " · fallback" : ""}
+          </span>
+        )}
+        <button
+          className="ghost"
+          onClick={refreshEquities}
+          disabled={refreshingEquities}
+          aria-label="Refresh xStocks list"
+          style={{ padding: "4px 8px" }}
+          title="Re-fetch xStocks list from Kraken"
+        >
+          <RefreshIcon /> {refreshingEquities ? "…" : "Refresh"}
+        </button>
       </h1>
 
       <div className="split">

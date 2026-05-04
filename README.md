@@ -12,6 +12,11 @@ preview & confirmation, dry-run mode, and a kill switch.
 > may not be available in all jurisdictions (notably restricted for US
 > persons). The disclosure is surfaced in the preview before every equity
 > order.
+>
+> The xStocks **allowlist is discovered dynamically** from Kraken's public
+> `/AssetPairs` endpoint at boot and refreshed every hour. A built-in
+> fallback list keeps things working when discovery is unavailable. The
+> Trade page shows the cache state and lets you force a refresh.
 
 ## Architecture
 
@@ -184,6 +189,8 @@ GET   /auth/me
 POST  /kraken/connect              save & verify API credentials
 GET   /kraken/balances
 GET   /kraken/pairs                public asset pair info
+GET   /kraken/equities-status      xStocks registry status (cache + ticker list)
+POST  /kraken/refresh-pairs        force refresh of the xStocks registry
 GET   /kraken/open-orders
 GET   /kraken/order-history
 POST  /kraken/place-order          (direct; requires confirm:true)

@@ -40,6 +40,11 @@ class Settings(BaseSettings):
 
     rate_limit_per_minute: str = Field(default="60/minute")
 
+    # If false, the FastAPI lifespan will not spawn the background task that
+    # refreshes the xStocks registry from Kraken's public AssetPairs. Tests
+    # set this to false to keep the suite offline; production keeps it true.
+    equity_registry_auto_refresh: bool = Field(default=True)
+
 
 @lru_cache
 def get_settings() -> Settings:

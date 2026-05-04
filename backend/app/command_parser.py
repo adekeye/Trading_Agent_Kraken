@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from .equities import (
     EQUITY_ALIASES,
     EQUITY_DISCLOSURE,
-    SUPPORTED_EQUITY_TICKERS,
+    get_registry,
     normalize_equity_ticker,
 )
 from .schemas import ParsedCommand
@@ -31,14 +31,16 @@ SUPPORTED_CRYPTO_ASSETS = {
     "MATIC", "LINK",
 }
 
-# Backwards-compatible alias used elsewhere in the codebase. Now includes
-# equity tickers (and their natural-language aliases) so the same regex can
-# detect them.
-SUPPORTED_ASSETS = (
-    SUPPORTED_CRYPTO_ASSETS
-    | SUPPORTED_EQUITY_TICKERS
-    | {alias.upper() for alias in EQUITY_ALIASES}
-)
+
+def _supported_assets() -> set[str]:
+    """All recognisable asset tokens (crypto + dynamically-discovered xStocks
+    + natural-language aliases). Computed per-call so the equity registry
+    can update without a process restart."""
+    return (
+        SUPPORTED_CRYPTO_ASSETS
+        | get_registry().tickers()
+        | {alias.upper() for alias in EQUITY_ALIASES}
+    )
 
 QUOTE_CURRENCIES = {"USD", "USDT", "USDC", "EUR", "GBP"}
 
@@ -123,7 +125,7 @@ def _detect_asset(text: str) -> tuple[str | None, str | None]:
     """Return ``(canonical_symbol, asset_class)`` where asset_class is
     ``"crypto"`` or ``"equity"``. Match longest-first so multi-word aliases
     like ``"bitcoin"`` win over ``"btc"`` when both are present."""
-    words = sorted(SUPPORTED_ASSETS, key=len, reverse=True)
+    words = sorted(_supported_assets(), key=len, reverse=True)
     for w in words:
         if re.search(rf"\b{re.escape(w.lower())}\b", text):
             equity = normalize_equity_ticker(w)
@@ -182,7 +184,7 @@ def _detect_quantity_and_notional(text: str) -> tuple[float | None, float | None
             pass
 
     # quantity-then-asset: "1000 xrp", "0.05 btc"
-    asset_alt = "|".join(sorted({a.lower() for a in SUPPORTED_ASSETS}, key=len, reverse=True))
+    asset_alt = "|".join(sorted({a.lower() for a in _supported_assets()}, key=len, reverse=True))
     m_qty = re.search(rf"({_NUM})\s+(?:units?\s+of\s+)?({asset_alt})\b", text)
     if m_qty:
         try:
@@ -302,6 +304,12 @@ def parse_command(raw: str) -> ParsedCommand:
 
     asset, asset_class = _detect_asset(text)
     if asset is None:
+        equity_tickers = sorted(get_registry().tickers())
+        # Cap the displayed list so rejection messages don't get huge once
+        # discovery brings in 50+ tickers.
+        equity_preview = ", ".join(equity_tickers[:25])
+        if len(equity_tickers) > 25:
+            equity_preview += f", … (+{len(equity_tickers) - 25} more)"
         return ParsedCommand(
             intent="place_order",
             confidence=0.4,
@@ -310,9 +318,7 @@ def parse_command(raw: str) -> ParsedCommand:
             rejection_reason=(
                 "Rejected: unsupported or missing asset. "
                 "Supported crypto: BTC, ETH, XRP, SOL, ADA, DOT, DOGE, USDT, USDC, MATIC, LINK. "
-                "Supported equities (xStocks): "
-                + ", ".join(sorted(SUPPORTED_EQUITY_TICKERS))
-                + "."
+                f"Supported equities (xStocks): {equity_preview}."
             ),
         )
 

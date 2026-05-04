@@ -7,14 +7,18 @@ from .models import UserSettings
 from .schemas import ParsedCommand
 
 
-from .equities import SUPPORTED_EQUITY_TICKERS
+from .equities import get_registry
 
 SUPPORTED_CRYPTO_ASSETS = {
     "BTC", "ETH", "XRP", "SOL", "ADA", "DOT", "DOGE", "USDT", "USDC", "MATIC", "LINK",
 }
 
-# Combined allowlist: crypto symbols + xStocks (tokenized equity) tickers.
-SUPPORTED_ASSETS = SUPPORTED_CRYPTO_ASSETS | SUPPORTED_EQUITY_TICKERS
+
+def _supported_assets() -> set[str]:
+    """Crypto symbols + xStocks (tokenized equity) tickers, evaluated lazily so
+    the registry can refresh without restarting the process."""
+    return SUPPORTED_CRYPTO_ASSETS | get_registry().tickers()
+
 
 SUPPORTED_QUOTES = {"USD", "USDT", "USDC", "EUR", "GBP"}
 
@@ -64,7 +68,7 @@ class RiskEngine:
             return RiskDecision(approved=False, reason="Order side must be 'buy' or 'sell'.")
 
         # Asset/quote support
-        if parsed.asset is None or parsed.asset.upper() not in SUPPORTED_ASSETS:
+        if parsed.asset is None or parsed.asset.upper() not in _supported_assets():
             return RiskDecision(
                 approved=False,
                 reason=f"Asset '{parsed.asset}' is not in the supported asset list.",
